@@ -109,6 +109,8 @@ const AthleticsInvoiceApp = () => {
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
   const [scheduleUrl, setScheduleUrl] = useState('');
+  const [editingEventId, setEditingEventId] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
 
   const roles = ['Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'];
 
@@ -197,7 +199,59 @@ const AthleticsInvoiceApp = () => {
       .then(r => r.json())
       .then(data => { if (data.success && data.data.length > 0) setCompanies(data.data.map(c => ({ ...c, paymentTerms: c.payment_terms, bankDetails: c.bank_details, invoicePrefix: c.invoice_prefix }))) })
       .catch(() => {});
+    fetch(`${apiUrl}/events`)
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data.length > 0) setEvents(data.data.map(e => ({ ...e, date: e.event_date }))) })
+      .catch(() => {});
   }, []);
+
+  const deleteEvent = async (id) => {
+    if (!window.confirm('Delete this event?')) return;
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/${id}`, { method: 'DELETE' });
+    } catch {}
+    setEvents(events.filter(e => e.id !== id));
+  };
+
+  const saveEditEvent = async (id) => {
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventName: editingEvent.eventName || editingEvent.event_name,
+          eventDate: editingEvent.date || editingEvent.event_date,
+          sport: editingEvent.sport,
+          opponent: editingEvent.opponent,
+          isHome: editingEvent.home !== undefined ? editingEvent.home : editingEvent.is_home,
+        }),
+      });
+    } catch {}
+    setEvents(events.map(e => e.id === id ? {
+      ...e,
+      event_name: editingEvent.eventName || editingEvent.event_name,
+      date: editingEvent.date || editingEvent.event_date,
+      event_date: editingEvent.date || editingEvent.event_date,
+      sport: editingEvent.sport,
+      opponent: editingEvent.opponent,
+      home: editingEvent.home !== undefined ? editingEvent.home : editingEvent.is_home,
+    } : e));
+    setEditingEventId(null);
+    setEditingEvent(null);
+  };
+
+  const createInvoiceFromEvent = (event) => {
+    const eventDate = event.date || event.event_date;
+    const eventName = event.event_name || event.eventName || `${event.sport} vs ${event.opponent}`;
+    setNewInvoice({
+      events: [{ eventName, eventDate, sport: event.sport }],
+      crew: [],
+      company: companies[0]?.name || 'University Athletics',
+      invoiceNumber: '',
+    });
+    setShowAddInvoice(true);
+    setActiveTab('invoices');
+  };
 
   const addFreelancer = async () => {
     if (!newFreelancer.name || !newFreelancer.email) return;
@@ -624,39 +678,120 @@ const AthleticsInvoiceApp = () => {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {events.sort((a, b) => new Date(a.date) - new Date(b.date)).map(event => (
-                <div key={event.id} className="flex items-center justify-between border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-4">
-                    <div className="text-center bg-blue-50 rounded-lg p-3 min-w-[80px]">
-                      <div className="text-sm font-semibold text-blue-600">
-                        {new Date(event.date).toLocaleDateString('en-US', { month: 'short' })}
-                      </div>
-                      <div className="text-2xl font-bold text-slate-800">
-                        {new Date(event.date).getDate()}
-                      </div>
+            {events.length === 0 ? (
+              <div className="text-center py-16 text-slate-400">
+                <Calendar size={48} className="mx-auto mb-4 opacity-30" />
+                <p className="text-lg font-semibold">No events yet</p>
+                <p className="text-sm mt-1">Import a schedule using the button above</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {[...events].sort((a, b) => new Date(a.date || a.event_date) - new Date(b.date || b.event_date)).map(event => {
+                  const eventDate = event.date || event.event_date;
+                  const isEditing = editingEventId === event.id;
+                  return (
+                    <div key={event.id} className={`border rounded-lg p-4 transition-shadow ${isEditing ? 'border-blue-400 shadow-md' : 'border-slate-200 hover:shadow-md'}`}>
+                      {isEditing ? (
+                        /* Edit mode */
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2">
+                            <input
+                              type="text"
+                              value={editingEvent.eventName || editingEvent.event_name || ''}
+                              onChange={e => setEditingEvent({ ...editingEvent, eventName: e.target.value, event_name: e.target.value })}
+                              placeholder="Event name"
+                              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <input
+                              type="date"
+                              value={editingEvent.date || editingEvent.event_date || ''}
+                              onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value, event_date: e.target.value })}
+                              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <select
+                              value={editingEvent.sport || ''}
+                              onChange={e => setEditingEvent({ ...editingEvent, sport: e.target.value })}
+                              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {sports.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={editingEvent.opponent || ''}
+                              onChange={e => setEditingEvent({ ...editingEvent, opponent: e.target.value })}
+                              placeholder="Opponent"
+                              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <select
+                              value={editingEvent.home !== undefined ? (editingEvent.home ? 'home' : 'away') : (editingEvent.is_home ? 'home' : 'away')}
+                              onChange={e => setEditingEvent({ ...editingEvent, home: e.target.value === 'home', is_home: e.target.value === 'home' })}
+                              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="home">Home</option>
+                              <option value="away">Away</option>
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => saveEditEvent(event.id)} className="px-4 py-2 text-white text-sm rounded-lg font-semibold" style={{ backgroundColor: branding.primaryColor }}>Save</button>
+                            <button onClick={() => { setEditingEventId(null); setEditingEvent(null); }} className="px-4 py-2 border border-slate-300 text-slate-600 text-sm rounded-lg font-semibold hover:bg-slate-50">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View mode */
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="text-center rounded-lg p-3 min-w-[80px]" style={{ backgroundColor: branding.primaryColor + '15' }}>
+                              <div className="text-sm font-semibold" style={{ color: branding.primaryColor }}>
+                                {new Date(eventDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                              </div>
+                              <div className="text-2xl font-bold text-slate-800">
+                                {new Date(eventDate + 'T12:00:00').getDate()}
+                              </div>
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-slate-800">{event.event_name || event.eventName || `${event.sport} vs ${event.opponent}`}</h3>
+                              <p className="text-sm text-slate-600">
+                                {event.sport} · vs {event.opponent} · {(event.home || event.is_home) ? 'Home' : 'Away'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {(event.invoiced || event.invoice_id) ? (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">Invoiced ✓</span>
+                            ) : (
+                              <button
+                                onClick={() => createInvoiceFromEvent(event)}
+                                className="px-3 py-1 text-white rounded-full text-sm font-semibold transition-colors"
+                                style={{ backgroundColor: branding.primaryColor }}
+                                title="Create invoice for this event"
+                              >
+                                + Invoice
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setEditingEventId(event.id); setEditingEvent({ ...event }); }}
+                              className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="Edit event"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteEvent(event.id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete event"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-800">{event.sport}</h3>
-                      <p className="text-sm text-slate-600">
-                        vs {event.opponent} {event.home ? '(Home)' : '(Away)'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {event.invoiced ? (
-                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                        Invoiced
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm font-semibold">
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
