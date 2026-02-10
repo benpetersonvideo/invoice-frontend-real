@@ -706,14 +706,33 @@ const AthleticsInvoiceApp = () => {
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-slate-800">Event Calendar</h2>
-              <button
-                onClick={() => setShowScheduleImport(true)}
-                className="flex items-center gap-2 text-white px-4 py-2 rounded-lg transition-colors"
-                style={{ backgroundColor: branding.primaryColor }}
-              >
-                <Plus size={20} />
-                Import Schedule
-              </button>
+              <div className="flex gap-2">
+                {events.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`Are you sure you want to delete all ${events.length} events? This cannot be undone.`)) return;
+                      for (const event of events) {
+                        try {
+                          await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/${event.id}`, { method: 'DELETE' });
+                        } catch {}
+                      }
+                      setEvents([]);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors font-semibold"
+                  >
+                    <Trash2 size={16} />
+                    Clear All
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowScheduleImport(true)}
+                  className="flex items-center gap-2 text-white px-4 py-2 rounded-lg transition-colors"
+                  style={{ backgroundColor: branding.primaryColor }}
+                >
+                  <Plus size={20} />
+                  Import Schedule
+                </button>
+              </div>
             </div>
 
             {events.length === 0 ? (
