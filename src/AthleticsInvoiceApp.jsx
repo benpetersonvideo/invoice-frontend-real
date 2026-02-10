@@ -191,6 +191,10 @@ const AthleticsInvoiceApp = () => {
       .then(r => r.json())
       .then(data => { if (data.success && data.data.length > 0) setInvoices(data.data) })
       .catch(() => {});
+    fetch(`${apiUrl}/companies`)
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data.length > 0) setCompanies(data.data.map(c => ({ ...c, paymentTerms: c.payment_terms, bankDetails: c.bank_details, invoicePrefix: c.invoice_prefix }))) })
+      .catch(() => {});
   }, []);
 
   const addFreelancer = async () => {
@@ -302,21 +306,46 @@ const AthleticsInvoiceApp = () => {
     });
   };
 
-  const addCompany = () => {
-    if (newCompany.name) {
-      setCompanies([...companies, { ...newCompany, id: Date.now() }]);
-      setNewCompany({
-        name: '',
-        paymentTerms: 'Net 30',
-        bankDetails: '',
-        invoicePrefix: 'INV',
-        logoUrl: '',
-        primaryColor: '#2563eb',
-        secondaryColor: '#1e40af',
-        schoolName: ''
+  const addCompany = async () => {
+    if (!newCompany.name) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCompany.name,
+          paymentTerms: newCompany.paymentTerms,
+          bankDetails: newCompany.bankDetails,
+          invoicePrefix: newCompany.invoicePrefix,
+          logoUrl: newCompany.logoUrl,
+          primaryColor: newCompany.primaryColor,
+          secondaryColor: newCompany.secondaryColor,
+          schoolName: newCompany.schoolName,
+        }),
       });
-      setShowAddCompany(false);
+      const data = await res.json();
+      if (data.success) {
+        setCompanies([...companies, { ...data.data, paymentTerms: data.data.payment_terms, bankDetails: data.data.bank_details, invoicePrefix: data.data.invoice_prefix }]);
+        alert('✅ Company saved!');
+      } else {
+        alert('❌ Failed to save company: ' + data.message);
+        return;
+      }
+    } catch {
+      // Fallback to local if backend unreachable
+      setCompanies([...companies, { ...newCompany, id: Date.now() }]);
     }
+    setNewCompany({
+      name: '',
+      paymentTerms: 'Net 30',
+      bankDetails: '',
+      invoicePrefix: 'INV',
+      logoUrl: '',
+      primaryColor: '#2563eb',
+      secondaryColor: '#1e40af',
+      schoolName: ''
+    });
+    setShowAddCompany(false);
   };
 
   const importSchedule = async () => {
