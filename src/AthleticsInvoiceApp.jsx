@@ -286,24 +286,87 @@ const AthleticsInvoiceApp = () => {
     }
   };
 
-  const importSchedule = () => {
-    // Simulate schedule import
-    alert(`Importing schedule from: ${scheduleUrl}\n\nNote: In a production app, this would scrape the athletics website and parse the schedule data.`);
+  const importSchedule = async () => {
+    if (!scheduleUrl) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/import-schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: scheduleUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const imported = data.data.events || [];
+        const newEvents = imported.map((e, i) => ({
+          id: Date.now() + i,
+          date: e.eventDate,
+          sport: e.sport,
+          opponent: e.opponent || 'TBD',
+          home: e.isHome,
+          invoiced: false,
+        }));
+        setEvents(prev => [...prev, ...newEvents]);
+        alert(`✅ ${data.data.message}`);
+      } else {
+        alert(`❌ Import failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert('❌ Could not reach the server. Make sure your backend is running.');
+    }
     setScheduleUrl('');
     setShowScheduleImport(false);
   };
 
-  const exportToPDF = (invoice) => {
-    alert(`Exporting invoice ${invoice.invoiceNumber} to PDF\n\nNote: In a production app, this would generate a professional PDF with company letterhead and all invoice details.`);
+  const exportToPDF = async (invoice) => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${invoice.id}/export-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('PDF generation failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      alert('❌ PDF export failed. Please check your backend is running.');
+    }
   };
 
-  const sendEmail = (invoice) => {
+  const sendEmail = async (invoice) => {
     const crewEmails = invoice.crew.map(member => {
       const freelancer = freelancers.find(f => f.id === member.freelancerId);
       return freelancer ? freelancer.email : '';
-    }).filter(Boolean).join(', ');
-    
-    alert(`Sending invoice ${invoice.invoiceNumber} via email\n\nTo: ${crewEmails}\n\nNote: In a production app, this would send the PDF invoice via email with a school watermark.`);
+    }).filter(Boolean);
+
+    if (crewEmails.length === 0) {
+      alert('❌ No email addresses found for this crew. Make sure freelancers have emails saved.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${invoice.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: crewEmails }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ Invoice sent to ${crewEmails.join(', ')}`);
+        setInvoices(prev => prev.map(inv =>
+          inv.id === invoice.id ? { ...inv, status: 'Sent' } : inv
+        ));
+      } else {
+        alert(`❌ Email failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert('❌ Email failed. Make sure SendGrid is configured and IT has added the DNS records.');
+    }
   };
 
   const filteredFreelancers = freelancers.filter(f =>
