@@ -94,14 +94,25 @@ const AthleticsInvoiceApp = () => {
     }
   ]);
 
-  const [branding, setBranding] = useState({
-    primaryColor: '#2563eb',
-    secondaryColor: '#1e40af',
-    accentColor: '#3b82f6',
-    schoolName: 'State University',
-    schoolLogo: '',
-    mascot: 'Eagles'
+  const [branding, setBranding] = useState(() => {
+    try {
+      const saved = localStorage.getItem('utep_branding');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      primaryColor: '#2563eb',
+      secondaryColor: '#1e40af',
+      accentColor: '#3b82f6',
+      schoolName: 'State University',
+      schoolLogo: '',
+      mascot: 'Eagles'
+    };
   });
+
+  const saveBranding = (updated) => {
+    setBranding(updated);
+    try { localStorage.setItem('utep_branding', JSON.stringify(updated)); } catch {}
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddFreelancer, setShowAddFreelancer] = useState(false);
@@ -1180,7 +1191,7 @@ Thank you for your work!
                   <input
                     type="text"
                     value={branding.schoolName}
-                    onChange={(e) => setBranding({ ...branding, schoolName: e.target.value })}
+                    onChange={(e) => saveBranding({ ...branding, schoolName: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1189,7 +1200,7 @@ Thank you for your work!
                   <input
                     type="text"
                     value={branding.mascot}
-                    onChange={(e) => setBranding({ ...branding, mascot: e.target.value })}
+                    onChange={(e) => saveBranding({ ...branding, mascot: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1199,13 +1210,13 @@ Thank you for your work!
                     <input
                       type="color"
                       value={branding.primaryColor}
-                      onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, primaryColor: e.target.value })}
                       className="h-10 w-20 rounded border border-slate-300 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={branding.primaryColor}
-                      onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, primaryColor: e.target.value })}
                       className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -1216,13 +1227,13 @@ Thank you for your work!
                     <input
                       type="color"
                       value={branding.secondaryColor}
-                      onChange={(e) => setBranding({ ...branding, secondaryColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, secondaryColor: e.target.value })}
                       className="h-10 w-20 rounded border border-slate-300 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={branding.secondaryColor}
-                      onChange={(e) => setBranding({ ...branding, secondaryColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, secondaryColor: e.target.value })}
                       className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -1233,37 +1244,61 @@ Thank you for your work!
                     <input
                       type="color"
                       value={branding.accentColor}
-                      onChange={(e) => setBranding({ ...branding, accentColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, accentColor: e.target.value })}
                       className="h-10 w-20 rounded border border-slate-300 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={branding.accentColor}
-                      onChange={(e) => setBranding({ ...branding, accentColor: e.target.value })}
+                      onChange={(e) => saveBranding({ ...branding, accentColor: e.target.value })}
                       className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">School Logo URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://example.com/logo.png"
-                    value={branding.schoolLogo}
-                    onChange={(e) => setBranding({ ...branding, schoolLogo: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">School Logo</label>
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/svg+xml"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => saveBranding({ ...branding, schoolLogo: evt.target.result });
+                        reader.readAsDataURL(file);
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {branding.schoolLogo && (
+                      <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
+                        <img src={branding.schoolLogo} alt="Logo preview" className="h-12 w-12 object-contain rounded" />
+                        <div className="flex-1 text-sm text-slate-600">Logo uploaded ✓</div>
+                        <button
+                          onClick={() => saveBranding({ ...branding, schoolLogo: '' })}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-400">PNG, JPG, GIF or SVG. Saved in your browser.</p>
+                  </div>
                 </div>
               </div>
               <div className="mt-6 p-4 bg-slate-50 rounded-lg">
                 <div className="text-sm font-semibold text-slate-700 mb-2">Preview:</div>
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl"
-                    style={{ backgroundColor: branding.primaryColor }}
-                  >
-                    {branding.mascot.charAt(0)}
-                  </div>
+                  {branding.schoolLogo ? (
+                    <img src={branding.schoolLogo} alt="Logo" className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white p-1" />
+                  ) : (
+                    <div
+                      className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+                      style={{ backgroundColor: branding.primaryColor }}
+                    >
+                      {branding.mascot.charAt(0)}
+                    </div>
+                  )}
                   <div>
                     <div className="font-bold text-lg" style={{ color: branding.primaryColor }}>
                       {branding.schoolName}
