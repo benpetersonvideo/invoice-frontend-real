@@ -106,6 +106,8 @@ const AthleticsInvoiceApp = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddFreelancer, setShowAddFreelancer] = useState(false);
   const [showAddInvoice, setShowAddInvoice] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [showEditInvoice, setShowEditInvoice] = useState(false);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
   const [scheduleUrl, setScheduleUrl] = useState('');
@@ -300,7 +302,14 @@ const AthleticsInvoiceApp = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setInvoices([...invoices, { id: data.data.id, events: validEvents, crew: newInvoice.crew, total, status: 'Draft', invoiceNumber: invoiceNum, company: newInvoice.company }]);
+        const newInvoiceId = data.data.id;
+        setInvoices([...invoices, { id: newInvoiceId, events: validEvents, crew: newInvoice.crew, total, status: 'Draft', invoiceNumber: invoiceNum, company: newInvoice.company }]);
+        // Mark matching calendar events as invoiced
+        setEvents(prev => prev.map(e => {
+          const eDate = (e.date || e.event_date || '').substring(0, 10);
+          const matched = validEvents.some(ve => ve.eventDate === eDate && ve.sport === e.sport);
+          return matched ? { ...e, invoiced: true, invoice_id: newInvoiceId } : e;
+        }));
         alert('✅ Invoice saved!');
       } else {
         alert('❌ Failed to save invoice: ' + data.message);
@@ -314,7 +323,30 @@ const AthleticsInvoiceApp = () => {
     setShowAddInvoice(false);
   };
 
-  const addCrewMember = () => {
+  const deleteInvoice = async (invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}? This cannot be undone.`)) return;
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${invoice.id}`, { method: 'DELETE' });
+    } catch {}
+    setInvoices(invoices.filter(inv => inv.id !== invoice.id));
+    // Unmark any calendar events linked to this invoice
+    setEvents(events.map(e => e.invoice_id === invoice.id ? { ...e, invoiced: false, invoice_id: null } : e));
+  };
+
+  const saveEditInvoice = async () => {
+    if (!editingInvoice) return;
+    const total = editingInvoice.crew.reduce((sum, m) => sum + (parseFloat(m.rate) || 0), 0);
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${editingInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...editingInvoice, total }),
+      });
+    } catch {}
+    setInvoices(invoices.map(inv => inv.id === editingInvoice.id ? { ...editingInvoice, total } : inv));
+    setShowEditInvoice(false);
+    setEditingInvoice(null);
+  };
     setNewInvoice({
       ...newInvoice,
       crew: [...newInvoice.crew, { freelancerId: '', role: '', rate: 0 }]
@@ -641,17 +673,19 @@ const AthleticsInvoiceApp = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-slate-800">
-                          {invoice.events.length === 1 
-                            ? invoice.events[0].eventName 
-                            : `${invoice.events.length} Events - ${invoice.events[0].sport}`}
+                          {invoice.events && invoice.events.length === 1
+                            ? invoice.events[0].eventName
+                            : `${invoice.events && invoice.events.length} Events - ${invoice.events && invoice.events[0].sport}`}
                         </h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          invoice.status === 'Sent' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          invoice.status === 'Sent' ? 'bg-green-100 text-green-700' :
+                          invoice.status === 'Paid' ? 'bg-blue-100 text-blue-700' :
+                          'bg-yellow-100 text-yellow-700'
                         }`}>
                           {invoice.status}
                         </span>
                       </div>
-                      {invoice.events.length > 1 && (
+                      {invoice.events && invoice.events.length > 1 && (
                         <div className="mb-3 bg-slate-50 rounded-lg p-3">
                           <div className="text-sm font-semibold text-slate-700 mb-2">Events included:</div>
                           {invoice.events.map((event, idx) => (
@@ -662,20 +696,20 @@ const AthleticsInvoiceApp = () => {
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4 text-sm text-slate-600 mb-3">
-                        <div>Invoice #: {invoice.invoiceNumber}</div>
-                        <div>Date: {invoice.events[0].eventDate}</div>
-                        <div>Sport: {invoice.events[0].sport}</div>
-                        <div>Crew: {invoice.crew.length} members</div>
+                        <div>Invoice #: {invoice.invoiceNumber || invoice.invoice_number}</div>
+                        <div>Date: {invoice.events && invoice.events[0] && invoice.events[0].eventDate}</div>
+                        <div>Sport: {invoice.events && invoice.events[0] && invoice.events[0].sport}</div>
+                        <div>Crew: {invoice.crew && invoice.crew.length} members</div>
                       </div>
                       <div className="text-sm text-slate-700">
-                        <strong>Crew:</strong> {invoice.crew.map(member => {
-                          const freelancer = freelancers.find(f => f.id === member.freelancerId);
+                        <strong>Crew:</strong> {invoice.crew && invoice.crew.map(member => {
+                          const freelancer = freelancers.find(f => f.id === member.freelancerId || f.id === member.freelancer_id);
                           return freelancer ? `${freelancer.name} (${member.role})` : member.role;
                         }).join(', ')}
                       </div>
                     </div>
-                    <div className="text-right ml-4">
-                      <div className="text-2xl font-bold text-slate-800 mb-3">${parseFloat(invoice.total).toFixed(2)}</div>
+                    <div className="text-right ml-4 flex flex-col items-end gap-2">
+                      <div className="text-2xl font-bold text-slate-800">${parseFloat(invoice.total).toFixed(2)}</div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => exportToPDF(invoice)}
@@ -686,11 +720,25 @@ const AthleticsInvoiceApp = () => {
                         </button>
                         <button
                           onClick={() => sendEmail(invoice)}
-                          className="p-2 hover:bg-blue-200 text-white rounded-lg transition-colors"
+                          className="p-2 text-white rounded-lg transition-colors hover:opacity-90"
                           style={{ backgroundColor: branding.primaryColor }}
                           title="Send Email"
                         >
                           <Mail size={18} />
+                        </button>
+                        <button
+                          onClick={() => { setEditingInvoice({ ...invoice, crew: invoice.crew ? [...invoice.crew] : [], events: invoice.events ? [...invoice.events] : [] }); setShowEditInvoice(true); }}
+                          className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                          title="Edit Invoice"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => deleteInvoice(invoice)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete Invoice"
+                        >
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </div>
@@ -1432,6 +1480,168 @@ const AthleticsInvoiceApp = () => {
                 <button
                   onClick={() => setShowAddInvoice(false)}
                   className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Invoice Modal */}
+      {showEditInvoice && editingInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-screen overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white">
+              <h3 className="text-2xl font-bold text-slate-800">Edit Invoice</h3>
+              <button onClick={() => { setShowEditInvoice(false); setEditingInvoice(null); }} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+
+              {/* Invoice Number & Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Invoice Number</label>
+                  <input
+                    type="text"
+                    value={editingInvoice.invoiceNumber || editingInvoice.invoice_number || ''}
+                    onChange={e => setEditingInvoice({ ...editingInvoice, invoiceNumber: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                  <select
+                    value={editingInvoice.status}
+                    onChange={e => setEditingInvoice({ ...editingInvoice, status: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Sent">Sent</option>
+                    <option value="Paid">Paid</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Events */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Events</label>
+                {editingInvoice.events.map((event, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Event name"
+                      value={event.eventName || ''}
+                      onChange={e => {
+                        const updated = [...editingInvoice.events];
+                        updated[idx] = { ...updated[idx], eventName: e.target.value };
+                        setEditingInvoice({ ...editingInvoice, events: updated });
+                      }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="date"
+                      value={(event.eventDate || '').substring(0, 10)}
+                      onChange={e => {
+                        const updated = [...editingInvoice.events];
+                        updated[idx] = { ...updated[idx], eventDate: e.target.value };
+                        setEditingInvoice({ ...editingInvoice, events: updated });
+                      }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select
+                      value={event.sport || ''}
+                      onChange={e => {
+                        const updated = [...editingInvoice.events];
+                        updated[idx] = { ...updated[idx], sport: e.target.value };
+                        setEditingInvoice({ ...editingInvoice, events: updated });
+                      }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {sports.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Crew */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Crew</label>
+                {editingInvoice.crew.map((member, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 mb-2">
+                    <select
+                      value={member.freelancerId || member.freelancer_id || ''}
+                      onChange={e => {
+                        const updated = [...editingInvoice.crew];
+                        const freelancer = freelancers.find(f => f.id === parseInt(e.target.value));
+                        updated[idx] = { ...updated[idx], freelancerId: parseInt(e.target.value), rate: freelancer?.rate || updated[idx].rate, role: freelancer?.specialty || updated[idx].role };
+                        setEditingInvoice({ ...editingInvoice, crew: updated });
+                      }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select freelancer</option>
+                      {freelancers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                    <select
+                      value={member.role || ''}
+                      onChange={e => {
+                        const updated = [...editingInvoice.crew];
+                        updated[idx] = { ...updated[idx], role: e.target.value };
+                        setEditingInvoice({ ...editingInvoice, crew: updated });
+                      }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select role</option>
+                      {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        value={member.rate || ''}
+                        onChange={e => {
+                          const updated = [...editingInvoice.crew];
+                          updated[idx] = { ...updated[idx], rate: parseFloat(e.target.value) || 0 };
+                          setEditingInvoice({ ...editingInvoice, crew: updated });
+                        }}
+                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Rate"
+                      />
+                      <button onClick={() => setEditingInvoice({ ...editingInvoice, crew: editingInvoice.crew.filter((_, i) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setEditingInvoice({ ...editingInvoice, crew: [...editingInvoice.crew, { freelancerId: '', role: '', rate: 0 }] })}
+                  className="text-sm text-blue-600 hover:underline mt-1"
+                >
+                  + Add crew member
+                </button>
+              </div>
+
+              {/* Total preview */}
+              <div className="bg-slate-50 rounded-lg p-3 text-right">
+                <span className="text-sm text-slate-600">New Total: </span>
+                <span className="text-lg font-bold" style={{ color: branding.primaryColor }}>
+                  ${editingInvoice.crew.reduce((sum, m) => sum + (parseFloat(m.rate) || 0), 0).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={saveEditInvoice}
+                  className="flex-1 text-white px-6 py-3 rounded-lg font-semibold"
+                  style={{ backgroundColor: branding.primaryColor }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => { setShowEditInvoice(false); setEditingInvoice(null); }}
+                  className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 font-semibold"
                 >
                   Cancel
                 </button>
