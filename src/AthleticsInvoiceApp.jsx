@@ -147,25 +147,27 @@ const AthleticsInvoiceApp = () => {
     let totalEvents = invoices.length;
 
     invoices.forEach(invoice => {
-      totalSpent += invoice.total;
-      
+      const invoiceTotal = parseFloat(invoice.total) || 0;
+      totalSpent += invoiceTotal;
+
       // Use first event for sport categorization
-      const primaryEvent = invoice.events[0];
+      const primaryEvent = invoice.events && invoice.events[0];
+      if (!primaryEvent) return;
       const sport = primaryEvent.sport;
-      const month = primaryEvent.eventDate.substring(0, 7);
-      
+      const month = primaryEvent.eventDate ? primaryEvent.eventDate.substring(0, 7) : 'Unknown';
+
       // Sport stats
       if (!sportStats[sport]) {
         sportStats[sport] = { total: 0, count: 0 };
       }
-      sportStats[sport].total += invoice.total;
+      sportStats[sport].total += invoiceTotal;
       sportStats[sport].count += 1;
 
       // Monthly stats
       if (!monthlyStats[month]) {
         monthlyStats[month] = { total: 0, count: 0 };
       }
-      monthlyStats[month].total += invoice.total;
+      monthlyStats[month].total += invoiceTotal;
       monthlyStats[month].count += 1;
     });
 
@@ -581,7 +583,7 @@ const AthleticsInvoiceApp = () => {
                       </div>
                     </div>
                     <div className="text-right ml-4">
-                      <div className="text-2xl font-bold text-slate-800 mb-3">${invoice.total}</div>
+                      <div className="text-2xl font-bold text-slate-800 mb-3">${parseFloat(invoice.total).toFixed(2)}</div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => exportToPDF(invoice)}
