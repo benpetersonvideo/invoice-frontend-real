@@ -571,7 +571,63 @@ const AthleticsInvoiceApp = () => {
     }
   };
 
-  const filteredFreelancers = freelancers.filter(f =>
+  const copyEmailBody = (invoice) => {
+    const company = companies.find(c => c.name === invoice.company) || {};
+    const crewLines = invoice.crew && invoice.crew.map(member => {
+      const freelancer = freelancers.find(f => f.id === member.freelancerId || f.id === member.freelancer_id);
+      const name = freelancer ? freelancer.name : 'Unknown';
+      return `  • ${name} — ${member.role} — $${parseFloat(member.rate).toFixed(2)}`;
+    }).join('\n');
+
+    const eventLines = invoice.events && invoice.events.map(e =>
+      `  • ${e.eventName} on ${e.eventDate}`
+    ).join('\n');
+
+    const invoiceNum = invoice.invoiceNumber || invoice.invoice_number;
+    const total = parseFloat(invoice.total).toFixed(2);
+    const paymentTerms = company.paymentTerms || company.payment_terms || 'Net 30';
+    const bankDetails = company.bankDetails || company.bank_details || '';
+    const schoolName = company.schoolName || company.school_name || invoice.company || 'UTEP Athletics';
+
+    const body =
+`Subject: Invoice ${invoiceNum} — ${schoolName} Broadcast Crew
+
+Hello,
+
+Please find your invoice details below for broadcast crew services rendered.
+
+INVOICE #${invoiceNum}
+${schoolName}
+
+EVENTS COVERED:
+${eventLines}
+
+CREW & RATES:
+${crewLines}
+
+TOTAL DUE: $${total}
+PAYMENT TERMS: ${paymentTerms}
+${bankDetails ? `\nPAYMENT DETAILS:\n${bankDetails}` : ''}
+
+Please remit payment within the terms stated above. If you have any questions, please don't hesitate to reach out.
+
+Thank you for your work!
+
+— ${schoolName} Broadcast Department`;
+
+    navigator.clipboard.writeText(body).then(() => {
+      alert('✅ Email copied to clipboard!\n\nOpen your email client, create a new message, and paste (Ctrl+V) to send.');
+    }).catch(() => {
+      // Fallback for browsers that block clipboard
+      const ta = document.createElement('textarea');
+      ta.value = body;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('✅ Email copied to clipboard!\n\nOpen your email client, create a new message, and paste (Ctrl+V) to send.');
+    });
+  };
     f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     f.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
     f.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -733,10 +789,17 @@ const AthleticsInvoiceApp = () => {
                           <Download size={18} />
                         </button>
                         <button
+                          onClick={() => copyEmailBody(invoice)}
+                          className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                          title="Copy email to clipboard"
+                        >
+                          📋
+                        </button>
+                        <button
                           onClick={() => sendEmail(invoice)}
                           className="p-2 text-white rounded-lg transition-colors hover:opacity-90"
                           style={{ backgroundColor: branding.primaryColor }}
-                          title="Send Email"
+                          title="Send Email (requires SendGrid setup)"
                         >
                           <Mail size={18} />
                         </button>
