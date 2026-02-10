@@ -111,6 +111,9 @@ const AthleticsInvoiceApp = () => {
   const [scheduleUrl, setScheduleUrl] = useState('');
   const [editingEventId, setEditingEventId] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importSelected, setImportSelected] = useState([]);
+  const [importFilters, setImportFilters] = useState({ location: 'all', sport: 'all' });
 
   const roles = ['Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'];
 
@@ -404,34 +407,69 @@ const AthleticsInvoiceApp = () => {
     setShowAddCompany(false);
   };
 
-  const importSchedule = async () => {
+  const fetchSchedulePreview = async () => {
     if (!scheduleUrl) return;
     try {
       const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/import-schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: scheduleUrl }),
+        body: JSON.stringify({ url: scheduleUrl, previewOnly: true }),
       });
       const data = await res.json();
       if (data.success) {
-        const imported = data.data.events || [];
-        const newEvents = imported.map((e, i) => ({
-          id: Date.now() + i,
-          date: e.eventDate,
-          sport: e.sport,
-          opponent: e.opponent || 'TBD',
-          home: e.isHome,
-          invoiced: false,
-        }));
-        setEvents(prev => [...prev, ...newEvents]);
-        alert(`✅ ${data.data.message}`);
+        const previewed = (data.data.events || []).map((e, i) => ({ ...e, tempId: i }));
+        setImportPreview(previewed);
+        setImportSelected(previewed.map(e => e.tempId));
+        setImportFilters({ location: 'all', sport: 'all' });
+        if (previewed.length === 0) alert('No events found at that URL. Try an individual sport schedule page.');
       } else {
-        alert(`❌ Import failed: ${data.message}`);
+        alert(`❌ ${data.message}`);
       }
-    } catch (err) {
-      alert('❌ Could not reach the server. Make sure your backend is running.');
+    } catch {
+      alert('❌ Could not reach the server.');
+    }
+  };
+
+  const importSchedule = async () => {
+    const toImport = importPreview.filter(e => importSelected.includes(e.tempId));
+    if (toImport.length === 0) return;
+    try {
+      const newEvents = toImport.map((e, i) => ({
+        id: Date.now() + i,
+        date: e.eventDate,
+        event_date: e.eventDate,
+        event_name: e.eventName,
+        sport: e.sport,
+        opponent: e.opponent || 'TBD',
+        home: e.isHome,
+        is_home: e.isHome,
+        invoiced: false,
+      }));
+      // Save each event to the database
+      for (const event of toImport) {
+        try {
+          await fetch(`${process.env.REACT_APP_API_BASE_URL}/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventName: event.eventName,
+              eventDate: event.eventDate,
+              sport: event.sport,
+              opponent: event.opponent || 'TBD',
+              isHome: event.isHome,
+            }),
+          });
+        } catch {}
+      }
+      setEvents(prev => [...prev, ...newEvents]);
+      alert(`✅ Imported ${toImport.length} event${toImport.length !== 1 ? 's' : ''} successfully!`);
+    } catch {
+      alert('❌ Import failed. Please try again.');
     }
     setScheduleUrl('');
+    setImportPreview([]);
+    setImportSelected([]);
+    setImportFilters({ location: 'all', sport: 'all' });
     setShowScheduleImport(false);
   };
 
@@ -1499,36 +1537,145 @@ const AthleticsInvoiceApp = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-2xl font-bold text-slate-800">Import Athletics Schedule</h3>
-              <button onClick={() => setShowScheduleImport(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowScheduleImport(false); setImportFilters({ location: 'all', sport: 'all' }); setImportPreview([]); setImportSelected([]); }} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
             <div className="p-6 space-y-4">
+
+              {/* Step 1 - URL */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  University Athletics Website URL
+                  Step 1 — Paste Schedule URL
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://university.edu/athletics/schedule"
-                  value={scheduleUrl}
-                  onChange={(e) => setScheduleUrl(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-sm text-slate-600 mt-2">
-                  Enter the URL of your university's athletics schedule page. The app will scrape and import upcoming events.
-                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://utepminers.com/sports/mens-basketball/schedule"
+                    value={scheduleUrl}
+                    onChange={(e) => setScheduleUrl(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={fetchSchedulePreview}
+                    className="px-4 py-2 text-white rounded-lg font-semibold whitespace-nowrap"
+                    style={{ backgroundColor: branding.primaryColor }}
+                  >
+                    Fetch Events
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Use individual sport schedule pages for best results</p>
               </div>
-              <div className="flex gap-3 pt-4">
+
+              {/* Step 2 - Filters (shown after fetch) */}
+              {importPreview.length > 0 && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Step 2 — Filter Events
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Location</label>
+                        <select
+                          value={importFilters.location}
+                          onChange={e => {
+                            const loc = e.target.value;
+                            setImportFilters(f => ({ ...f, location: loc }));
+                            setImportSelected(
+                              importPreview
+                                .filter(ev => loc === 'all' || (loc === 'home' ? ev.isHome : !ev.isHome))
+                                .filter(ev => importFilters.sport === 'all' || ev.sport === importFilters.sport)
+                                .map(ev => ev.tempId)
+                            );
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="all">All Games (Home + Away)</option>
+                          <option value="home">Home Games Only</option>
+                          <option value="away">Away Games Only</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Sport</label>
+                        <select
+                          value={importFilters.sport}
+                          onChange={e => {
+                            const sp = e.target.value;
+                            setImportFilters(f => ({ ...f, sport: sp }));
+                            setImportSelected(
+                              importPreview
+                                .filter(ev => importFilters.location === 'all' || (importFilters.location === 'home' ? ev.isHome : !ev.isHome))
+                                .filter(ev => sp === 'all' || ev.sport === sp)
+                                .map(ev => ev.tempId)
+                            );
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="all">All Sports</option>
+                          {[...new Set(importPreview.map(e => e.sport))].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3 - Select individual events */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Step 3 — Select Events to Import
+                      </label>
+                      <div className="flex gap-2 text-xs">
+                        <button onClick={() => setImportSelected(importPreview.map(e => e.tempId))} className="text-blue-600 hover:underline">Select all</button>
+                        <span className="text-slate-300">|</span>
+                        <button onClick={() => setImportSelected([])} className="text-blue-600 hover:underline">Clear</button>
+                      </div>
+                    </div>
+                    <div className="border border-slate-200 rounded-lg max-h-56 overflow-y-auto">
+                      {importPreview
+                        .filter(ev => importFilters.location === 'all' || (importFilters.location === 'home' ? ev.isHome : !ev.isHome))
+                        .filter(ev => importFilters.sport === 'all' || ev.sport === importFilters.sport)
+                        .map(ev => (
+                          <label key={ev.tempId} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                            <input
+                              type="checkbox"
+                              checked={importSelected.includes(ev.tempId)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setImportSelected(prev => [...prev, ev.tempId]);
+                                } else {
+                                  setImportSelected(prev => prev.filter(id => id !== ev.tempId));
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${ev.isHome ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {ev.isHome ? 'Home' : 'Away'}
+                            </span>
+                            <span className="text-sm font-medium text-slate-800 flex-1">{ev.eventName}</span>
+                            <span className="text-xs text-slate-500">{ev.eventDate}</span>
+                          </label>
+                        ))
+                      }
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">{importSelected.length} event{importSelected.length !== 1 ? 's' : ''} selected</p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-2">
                 <button
                   onClick={importSchedule}
-                  className="flex-1 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+                  disabled={importSelected.length === 0}
+                  className="flex-1 text-white px-6 py-3 rounded-lg transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ backgroundColor: branding.primaryColor }}
                 >
-                  Import Schedule
+                  Import {importSelected.length > 0 ? `${importSelected.length} Event${importSelected.length !== 1 ? 's' : ''}` : 'Schedule'}
                 </button>
                 <button
-                  onClick={() => setShowScheduleImport(false)}
+                  onClick={() => { setShowScheduleImport(false); setImportFilters({ location: 'all', sport: 'all' }); setImportPreview([]); setImportSelected([]); }}
                   className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-semibold"
                 >
                   Cancel
