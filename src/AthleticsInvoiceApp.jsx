@@ -347,6 +347,8 @@ const AthleticsInvoiceApp = () => {
     setShowEditInvoice(false);
     setEditingInvoice(null);
   };
+
+  const addCrewMember = () => {
     setNewInvoice({
       ...newInvoice,
       crew: [...newInvoice.crew, { freelancerId: '', role: '', rate: 0 }]
