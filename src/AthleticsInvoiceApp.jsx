@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Users, FileText, BarChart3, Settings, Plus, Search, Download, Mail, X, Edit2, Trash2, DollarSign, Clock, TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, Users, FileText, BarChart3, Settings, Plus, Search, Download, Mail, X, Trash2, DollarSign, TrendingUp } from 'lucide-react';
 
 const AthleticsInvoiceApp = () => {
   const [activeTab, setActiveTab] = useState('invoices');
@@ -108,7 +108,6 @@ const AthleticsInvoiceApp = () => {
   const [showAddInvoice, setShowAddInvoice] = useState(false);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [scheduleUrl, setScheduleUrl] = useState('');
 
   const roles = ['Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'];
