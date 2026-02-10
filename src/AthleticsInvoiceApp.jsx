@@ -687,7 +687,9 @@ const AthleticsInvoiceApp = () => {
             ) : (
               <div className="space-y-3">
                 {[...events].sort((a, b) => new Date(a.date || a.event_date) - new Date(b.date || b.event_date)).map(event => {
-                  const eventDate = event.date || event.event_date;
+                  const rawDate = event.date || event.event_date || '';
+                  const eventDate = rawDate.substring(0, 10); // Always take just YYYY-MM-DD
+                  const parsedDate = new Date(eventDate + 'T12:00:00');
                   const isEditing = editingEventId === event.id;
                   return (
                     <div key={event.id} className={`border rounded-lg p-4 transition-shadow ${isEditing ? 'border-blue-400 shadow-md' : 'border-slate-200 hover:shadow-md'}`}>
@@ -704,7 +706,7 @@ const AthleticsInvoiceApp = () => {
                             />
                             <input
                               type="date"
-                              value={editingEvent.date || editingEvent.event_date || ''}
+                              value={(editingEvent.date || editingEvent.event_date || '').substring(0, 10)}
                               onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value, event_date: e.target.value })}
                               className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -744,10 +746,10 @@ const AthleticsInvoiceApp = () => {
                           <div className="flex items-center gap-4">
                             <div className="text-center rounded-lg p-3 min-w-[80px]" style={{ backgroundColor: branding.primaryColor + '15' }}>
                               <div className="text-sm font-semibold" style={{ color: branding.primaryColor }}>
-                                {new Date(eventDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                                {parsedDate.toLocaleDateString('en-US', { month: 'short' })}
                               </div>
                               <div className="text-2xl font-bold text-slate-800">
-                                {new Date(eventDate + 'T12:00:00').getDate()}
+                                {parsedDate.getDate()}
                               </div>
                             </div>
                             <div>
