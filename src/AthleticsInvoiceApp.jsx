@@ -179,43 +179,76 @@ const AthleticsInvoiceApp = () => {
 
   const stats = calculateStats();
 
-  const addFreelancer = () => {
-    if (newFreelancer.name && newFreelancer.email) {
+  // Load real data from database on startup
+  React.useEffect(() => {
+    const apiUrl = process.env.REACT_APP_API_BASE_URL;
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/freelancers`)
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data.length > 0) setFreelancers(data.data.map(f => ({ ...f, w9: f.w9_on_file }))) })
+      .catch(() => {});
+    fetch(`${apiUrl}/invoices`)
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data.length > 0) setInvoices(data.data) })
+      .catch(() => {});
+  }, []);
+
+  const addFreelancer = async () => {
+    if (!newFreelancer.name || !newFreelancer.email) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/freelancers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newFreelancer, rate: parseFloat(newFreelancer.rate) || 0 }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFreelancers([...freelancers, { ...data.data, w9: data.data.w9_on_file }]);
+        setNewFreelancer({ name: '', email: '', phone: '', rate: '', specialty: '', w9: false, notes: '', availability: '' });
+        setShowAddFreelancer(false);
+      } else {
+        alert('❌ Failed to save freelancer: ' + data.message);
+      }
+    } catch {
       setFreelancers([...freelancers, { ...newFreelancer, id: Date.now(), rate: parseFloat(newFreelancer.rate) || 0 }]);
       setNewFreelancer({ name: '', email: '', phone: '', rate: '', specialty: '', w9: false, notes: '', availability: '' });
       setShowAddFreelancer(false);
     }
   };
 
-  const deleteFreelancer = (id) => {
+  const deleteFreelancer = async (id) => {
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/freelancers/${id}`, { method: 'DELETE' });
+    } catch {}
     setFreelancers(freelancers.filter(f => f.id !== id));
   };
 
-  const addInvoice = () => {
+  const addInvoice = async () => {
     const validEvents = newInvoice.events.filter(e => e.eventName && e.eventDate && e.sport);
-    if (validEvents.length > 0 && newInvoice.crew.length > 0) {
-      const total = newInvoice.crew.reduce((sum, member) => sum + member.rate, 0);
-      const company = companies.find(c => c.name === newInvoice.company);
-      const invoiceNum = newInvoice.invoiceNumber || `${company.invoicePrefix}-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
-      
-      setInvoices([...invoices, {
-        id: Date.now(),
-        events: validEvents,
-        crew: newInvoice.crew,
-        total,
-        status: 'Draft',
-        invoiceNumber: invoiceNum,
-        company: newInvoice.company
-      }]);
-      
-      setNewInvoice({
-        events: [{ eventName: '', eventDate: '', sport: '' }],
-        crew: [],
-        company: 'University Athletics',
-        invoiceNumber: ''
+    if (validEvents.length === 0 || newInvoice.crew.length === 0) return;
+    const total = newInvoice.crew.reduce((sum, member) => sum + member.rate, 0);
+    const company = companies.find(c => c.name === newInvoice.company);
+    const invoiceNum = newInvoice.invoiceNumber || `${company.invoicePrefix}-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: validEvents, crew: newInvoice.crew, company: newInvoice.company, invoiceNumber: invoiceNum }),
       });
-      setShowAddInvoice(false);
+      const data = await res.json();
+      if (data.success) {
+        setInvoices([...invoices, { id: data.data.id, events: validEvents, crew: newInvoice.crew, total, status: 'Draft', invoiceNumber: invoiceNum, company: newInvoice.company }]);
+        alert('✅ Invoice saved!');
+      } else {
+        alert('❌ Failed to save invoice: ' + data.message);
+        return;
+      }
+    } catch {
+      alert('❌ Could not reach backend. Invoice saved locally only.');
+      setInvoices([...invoices, { id: Date.now(), events: validEvents, crew: newInvoice.crew, total, status: 'Draft', invoiceNumber: invoiceNum, company: newInvoice.company }]);
     }
+    setNewInvoice({ events: [{ eventName: '', eventDate: '', sport: '' }], crew: [], company: 'University Athletics', invoiceNumber: '' });
+    setShowAddInvoice(false);
   };
 
   const addCrewMember = () => {
