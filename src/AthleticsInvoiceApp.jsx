@@ -472,19 +472,6 @@ const AthleticsInvoiceApp = () => {
     let skipped = 0;
 
     for (const event of toImport) {
-      // Check if this event already exists in current state (same date + sport + opponent)
-      const alreadyExists = events.some(e => {
-        const eDate = (e.date || e.event_date || '').substring(0, 10);
-        return eDate === event.eventDate &&
-          e.sport === event.sport &&
-          (e.opponent || '').toLowerCase() === (event.opponent || 'TBD').toLowerCase();
-      });
-
-      if (alreadyExists) {
-        skipped++;
-        continue;
-      }
-
       try {
         const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/events`, {
           method: 'POST',
@@ -499,17 +486,21 @@ const AthleticsInvoiceApp = () => {
         });
         const data = await res.json();
         if (data.success) {
-          savedEvents.push({
-            id: data.data.id,
-            date: event.eventDate,
-            event_date: event.eventDate,
-            event_name: event.eventName,
-            sport: event.sport,
-            opponent: event.opponent || 'TBD',
-            home: event.isHome,
-            is_home: event.isHome,
-            invoiced: false,
-          });
+          if (data.duplicate) {
+            skipped++;
+          } else {
+            savedEvents.push({
+              id: data.data.id,
+              date: event.eventDate,
+              event_date: event.eventDate,
+              event_name: event.eventName,
+              sport: event.sport,
+              opponent: event.opponent || 'TBD',
+              home: event.isHome,
+              is_home: event.isHome,
+              invoiced: false,
+            });
+          }
         }
       } catch {}
     }
@@ -517,7 +508,7 @@ const AthleticsInvoiceApp = () => {
     if (savedEvents.length > 0) setEvents(prev => [...prev, ...savedEvents]);
 
     const msg = skipped > 0
-      ? `✅ Imported ${savedEvents.length} event${savedEvents.length !== 1 ? 's' : ''}. Skipped ${skipped} duplicate${skipped !== 1 ? 's' : ''} already in your calendar.`
+      ? `✅ Imported ${savedEvents.length} new event${savedEvents.length !== 1 ? 's' : ''}. Skipped ${skipped} already in your calendar.`
       : `✅ Imported ${savedEvents.length} event${savedEvents.length !== 1 ? 's' : ''} successfully!`;
     alert(msg);
 
