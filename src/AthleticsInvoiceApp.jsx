@@ -467,39 +467,60 @@ const AthleticsInvoiceApp = () => {
   const importSchedule = async () => {
     const toImport = importPreview.filter(e => importSelected.includes(e.tempId));
     if (toImport.length === 0) return;
-    try {
-      const newEvents = toImport.map((e, i) => ({
-        id: Date.now() + i,
-        date: e.eventDate,
-        event_date: e.eventDate,
-        event_name: e.eventName,
-        sport: e.sport,
-        opponent: e.opponent || 'TBD',
-        home: e.isHome,
-        is_home: e.isHome,
-        invoiced: false,
-      }));
-      // Save each event to the database
-      for (const event of toImport) {
-        try {
-          await fetch(`${process.env.REACT_APP_API_BASE_URL}/events`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventName: event.eventName,
-              eventDate: event.eventDate,
-              sport: event.sport,
-              opponent: event.opponent || 'TBD',
-              isHome: event.isHome,
-            }),
-          });
-        } catch {}
+
+    const savedEvents = [];
+    let skipped = 0;
+
+    for (const event of toImport) {
+      // Check if this event already exists in current state (same date + sport + opponent)
+      const alreadyExists = events.some(e => {
+        const eDate = (e.date || e.event_date || '').substring(0, 10);
+        return eDate === event.eventDate &&
+          e.sport === event.sport &&
+          (e.opponent || '').toLowerCase() === (event.opponent || 'TBD').toLowerCase();
+      });
+
+      if (alreadyExists) {
+        skipped++;
+        continue;
       }
-      setEvents(prev => [...prev, ...newEvents]);
-      alert(`✅ Imported ${toImport.length} event${toImport.length !== 1 ? 's' : ''} successfully!`);
-    } catch {
-      alert('❌ Import failed. Please try again.');
+
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventName: event.eventName,
+            eventDate: event.eventDate,
+            sport: event.sport,
+            opponent: event.opponent || 'TBD',
+            isHome: event.isHome,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          savedEvents.push({
+            id: data.data.id,
+            date: event.eventDate,
+            event_date: event.eventDate,
+            event_name: event.eventName,
+            sport: event.sport,
+            opponent: event.opponent || 'TBD',
+            home: event.isHome,
+            is_home: event.isHome,
+            invoiced: false,
+          });
+        }
+      } catch {}
     }
+
+    if (savedEvents.length > 0) setEvents(prev => [...prev, ...savedEvents]);
+
+    const msg = skipped > 0
+      ? `✅ Imported ${savedEvents.length} event${savedEvents.length !== 1 ? 's' : ''}. Skipped ${skipped} duplicate${skipped !== 1 ? 's' : ''} already in your calendar.`
+      : `✅ Imported ${savedEvents.length} event${savedEvents.length !== 1 ? 's' : ''} successfully!`;
+    alert(msg);
+
     setScheduleUrl('');
     setImportPreview([]);
     setImportSelected([]);
