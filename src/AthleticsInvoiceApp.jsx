@@ -94,24 +94,26 @@ const AthleticsInvoiceApp = () => {
     }
   ]);
 
-  const [branding, setBranding] = useState(() => {
-    try {
-      const saved = localStorage.getItem('utep_branding');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      primaryColor: '#2563eb',
-      secondaryColor: '#1e40af',
-      accentColor: '#3b82f6',
-      schoolName: 'State University',
-      schoolLogo: '',
-      mascot: 'Eagles'
-    };
+  const [branding, setBranding] = useState({
+    primaryColor: '#2563eb',
+    secondaryColor: '#1e40af',
+    accentColor: '#3b82f6',
+    schoolName: 'State University',
+    schoolLogo: '',
+    mascot: 'Eagles'
   });
 
-  const saveBranding = (updated) => {
+  const saveBranding = async (updated) => {
     setBranding(updated);
-    try { localStorage.setItem('utep_branding', JSON.stringify(updated)); } catch {}
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/branding`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Failed to save branding:', err);
+    }
   };
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,6 +148,7 @@ const AthleticsInvoiceApp = () => {
     'Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 
     'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'
   ]);
+  const [isBackendLoading, setIsBackendLoading] = useState(true);
 
   const sports = ['Football', 'Basketball', 'Soccer', 'Baseball', 'Volleyball', 'Hockey', 'Softball', 'Lacrosse', 'Track & Field', 'Swimming'];
 
@@ -227,6 +230,32 @@ const AthleticsInvoiceApp = () => {
   React.useEffect(() => {
     const apiUrl = process.env.REACT_APP_API_BASE_URL;
     if (!apiUrl) return;
+    
+    // Check backend health first
+    const checkBackend = async () => {
+      try {
+        await fetch(`${apiUrl}/health`, { timeout: 5000 });
+        setIsBackendLoading(false);
+      } catch {
+        // Backend is waking up, poll until ready
+        const checkInterval = setInterval(async () => {
+          try {
+            await fetch(`${apiUrl}/health`);
+            setIsBackendLoading(false);
+            clearInterval(checkInterval);
+          } catch {}
+        }, 2000);
+        
+        // Give up after 30 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          setIsBackendLoading(false);
+        }, 30000);
+      }
+    };
+    
+    checkBackend();
+    
     fetch(`${apiUrl}/freelancers`)
       .then(r => r.json())
       .then(data => { if (data.success && data.data.length > 0) setFreelancers(data.data.map(f => ({ ...f, w9: f.w9_on_file, rate: parseFloat(f.rate) || 0 }))) })
@@ -254,6 +283,21 @@ const AthleticsInvoiceApp = () => {
     fetch(`${apiUrl}/roles`)
       .then(r => r.json())
       .then(data => { if (data.success && data.data.length > 0) setRoles(data.data.map(r => r.name)) })
+      .catch(() => {});
+    fetch(`${apiUrl}/branding`)
+      .then(r => r.json())
+      .then(data => { 
+        if (data.success && data.data) {
+          setBranding({
+            primaryColor: data.data.primary_color,
+            secondaryColor: data.data.secondary_color,
+            accentColor: data.data.accent_color,
+            schoolName: data.data.school_name,
+            schoolLogo: data.data.school_logo,
+            mascot: data.data.mascot
+          });
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -826,6 +870,20 @@ Thank you for your work!
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Backend Loading Overlay */}
+      {isBackendLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md text-center">
+            <div className="mb-4">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Activating Server...</h3>
+            <p className="text-slate-600">The backend is waking up from sleep. This may take 30-60 seconds.</p>
+            <p className="text-sm text-slate-500 mt-2">Free tier servers spin down after inactivity.</p>
+          </div>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto p-6">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6" style={{ borderTop: `4px solid ${branding.primaryColor}` }}>
