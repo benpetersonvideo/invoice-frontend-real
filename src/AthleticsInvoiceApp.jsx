@@ -105,11 +105,14 @@ const AthleticsInvoiceApp = () => {
 
   const saveBranding = async (updated) => {
     setBranding(updated);
+    if (updated.bgImages !== undefined) {
+      setBgImages(updated.bgImages);
+    }
     try {
       await fetch(`${process.env.REACT_APP_API_BASE_URL}/branding`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+        body: JSON.stringify({ ...updated, bgImages: updated.bgImages !== undefined ? updated.bgImages : bgImages }),
       });
     } catch (err) {
       console.error('Failed to save branding:', err);
@@ -149,6 +152,8 @@ const AthleticsInvoiceApp = () => {
     'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'
   ]);
   const [isBackendLoading, setIsBackendLoading] = useState(true);
+  const [bgImages, setBgImages] = useState([]);
+  const [bgCurrentIndex, setBgCurrentIndex] = useState(0);
 
   const sports = ['Football', 'Basketball', 'Soccer', 'Baseball', 'Volleyball', 'Hockey', 'Softball', 'Lacrosse', 'Track & Field', 'Swimming'];
 
@@ -296,10 +301,22 @@ const AthleticsInvoiceApp = () => {
             schoolLogo: data.data.school_logo,
             mascot: data.data.mascot
           });
+          if (data.data.bg_images) {
+            try { setBgImages(JSON.parse(data.data.bg_images)); } catch {}
+          }
         }
       })
       .catch(() => {});
   }, []);
+
+  // Slideshow timer
+  React.useEffect(() => {
+    if (bgImages.length < 2) return;
+    const timer = setInterval(() => {
+      setBgCurrentIndex(i => (i + 1) % bgImages.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [bgImages]);
 
   const deleteEvent = async (id) => {
     if (!window.confirm('Delete this event?')) return;
@@ -881,7 +898,49 @@ Thank you for your work!
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen" style={{ position: 'relative' }}>
+      {/* Background slideshow */}
+      {bgImages.length > 0 && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 0, overflow: 'hidden' }}>
+          {bgImages.map((img, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: `url(${img})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                opacity: i === bgCurrentIndex ? 1 : 0,
+                transition: 'opacity 1.5s ease-in-out',
+                animation: i === bgCurrentIndex ? 'kenBurns 8s ease-in-out infinite alternate' : 'none',
+              }}
+            />
+          ))}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 100%)' }} />
+          {bgImages.length > 1 && (
+            <div style={{ position: 'absolute', bottom: 16, right: 16, display: 'flex', gap: 6, zIndex: 2 }}>
+              {bgImages.map((_, i) => (
+                <button key={i} onClick={() => setBgCurrentIndex(i)} style={{
+                  width: i === bgCurrentIndex ? 20 : 8, height: 8, borderRadius: 4,
+                  border: 'none', cursor: 'pointer', padding: 0,
+                  transition: 'all 0.3s ease',
+                  backgroundColor: i === bgCurrentIndex ? 'white' : 'rgba(255,255,255,0.4)',
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {bgImages.length === 0 && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 0, background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%)' }} />
+      )}
+      <style>{`
+        @keyframes kenBurns {
+          from { transform: scale(1) translate(0%, 0%); }
+          to   { transform: scale(1.08) translate(-1.5%, -1%); }
+        }
+      `}</style>
+
       {/* Backend Loading Overlay */}
       {isBackendLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -895,8 +954,8 @@ Thank you for your work!
           </div>
         </div>
       )}
-      
-      <div className="max-w-7xl mx-auto p-6">
+
+      <div style={{ position: 'relative', zIndex: 1 }} className="max-w-7xl mx-auto p-6">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6" style={{ borderTop: `4px solid ${branding.primaryColor}` }}>
           <div className="flex items-center justify-between">
@@ -1554,6 +1613,80 @@ Thank you for your work!
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Background Slideshow */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Background Slideshow</h2>
+              <p className="text-sm text-slate-600 mb-6">Upload images that rotate behind the app. Photos of your stadium, events, or team work great.</p>
+
+              {/* Upload */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Add Images</label>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  multiple
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files);
+                    const newImgs = await Promise.all(files.map(file => new Promise(resolve => {
+                      const reader = new FileReader();
+                      reader.onload = evt => resolve(evt.target.result);
+                      reader.readAsDataURL(file);
+                    })));
+                    const updated = [...bgImages, ...newImgs];
+                    setBgImages(updated);
+                    saveBranding({ ...branding, bgImages: updated });
+                  }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">PNG, JPG, GIF or WEBP. Select multiple files at once. Images stored in database.</p>
+              </div>
+
+              {/* Image grid */}
+              {bgImages.length > 0 ? (
+                <div>
+                  <div className="text-sm font-semibold text-slate-700 mb-3">{bgImages.length} image{bgImages.length !== 1 ? 's' : ''} in rotation:</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {bgImages.map((img, i) => (
+                      <div key={i} className="relative group rounded-lg overflow-hidden aspect-video border border-slate-200">
+                        <img src={img} alt={`Slide ${i + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
+                          <button
+                            onClick={() => {
+                              const updated = bgImages.filter((_, idx) => idx !== i);
+                              setBgImages(updated);
+                              setBgCurrentIndex(0);
+                              saveBranding({ ...branding, bgImages: updated });
+                            }}
+                            className="opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full p-1.5 transition-opacity"
+                            title="Remove image"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </div>
+                        <div className="absolute bottom-1 left-1 text-xs text-white bg-black bg-opacity-50 rounded px-1">{i + 1}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!window.confirm('Remove all background images?')) return;
+                      setBgImages([]);
+                      setBgCurrentIndex(0);
+                      saveBranding({ ...branding, bgImages: [] });
+                    }}
+                    className="mt-4 text-sm text-red-500 hover:underline"
+                  >
+                    Remove all images
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-lg text-slate-400">
+                  <div className="text-3xl mb-2">🖼️</div>
+                  <div className="text-sm">No background images yet. Upload some above!</div>
+                </div>
+              )}
             </div>
 
             {/* Roles Management */}
