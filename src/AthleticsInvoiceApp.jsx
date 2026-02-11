@@ -105,17 +105,43 @@ const AthleticsInvoiceApp = () => {
 
   const saveBranding = async (updated) => {
     setBranding(updated);
-    if (updated.bgImages !== undefined) {
-      setBgImages(updated.bgImages);
-    }
     try {
       await fetch(`${process.env.REACT_APP_API_BASE_URL}/branding`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updated, bgImages: updated.bgImages !== undefined ? updated.bgImages : bgImages }),
+        body: JSON.stringify({
+          primaryColor: updated.primaryColor,
+          secondaryColor: updated.secondaryColor,
+          accentColor: updated.accentColor,
+          schoolName: updated.schoolName,
+          schoolLogo: updated.schoolLogo,
+          mascot: updated.mascot,
+          bgImages: bgImages,
+        }),
       });
     } catch (err) {
       console.error('Failed to save branding:', err);
+    }
+  };
+
+  const saveBgImages = async (updated) => {
+    setBgImages(updated);
+    try {
+      await fetch(`${process.env.REACT_APP_API_BASE_URL}/branding`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          primaryColor: branding.primaryColor,
+          secondaryColor: branding.secondaryColor,
+          accentColor: branding.accentColor,
+          schoolName: branding.schoolName,
+          schoolLogo: branding.schoolLogo,
+          mascot: branding.mascot,
+          bgImages: updated,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to save background images:', err);
     }
   };
 
@@ -1635,8 +1661,7 @@ Thank you for your work!
                       reader.readAsDataURL(file);
                     })));
                     const updated = [...bgImages, ...newImgs];
-                    setBgImages(updated);
-                    saveBranding({ ...branding, bgImages: updated });
+                    saveBgImages(updated);
                   }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -1655,9 +1680,8 @@ Thank you for your work!
                           <button
                             onClick={() => {
                               const updated = bgImages.filter((_, idx) => idx !== i);
-                              setBgImages(updated);
                               setBgCurrentIndex(0);
-                              saveBranding({ ...branding, bgImages: updated });
+                              saveBgImages(updated);
                             }}
                             className="opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full p-1.5 transition-opacity"
                             title="Remove image"
@@ -1672,9 +1696,8 @@ Thank you for your work!
                   <button
                     onClick={() => {
                       if (!window.confirm('Remove all background images?')) return;
-                      setBgImages([]);
                       setBgCurrentIndex(0);
-                      saveBranding({ ...branding, bgImages: [] });
+                      saveBgImages([]);
                     }}
                     className="mt-4 text-sm text-red-500 hover:underline"
                   >
