@@ -137,8 +137,13 @@ const AthleticsInvoiceApp = () => {
   const [importPreview, setImportPreview] = useState([]);
   const [importSelected, setImportSelected] = useState([]);
   const [importFilters, setImportFilters] = useState({ location: 'all', sport: 'all' });
+  const [newRole, setNewRole] = useState('');
+  const [editingRole, setEditingRole] = useState(null);
 
-  const roles = ['Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'];
+  const [roles, setRoles] = useState([
+    'Camera Operator', 'Director', 'Audio Engineer', 'Graphics Operator', 
+    'Producer', 'Technical Director', 'Replay Operator', 'Lighting Director'
+  ]);
 
   const sports = ['Football', 'Basketball', 'Soccer', 'Baseball', 'Volleyball', 'Hockey', 'Softball', 'Lacrosse', 'Track & Field', 'Swimming'];
 
@@ -237,6 +242,10 @@ const AthleticsInvoiceApp = () => {
       .then(r => r.json())
       .then(data => { if (data.success && data.data.length > 0) setEvents(data.data.map(e => ({ ...e, date: e.event_date }))) })
       .catch(() => {});
+    fetch(`${apiUrl}/roles`)
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data.length > 0) setRoles(data.data.map(r => r.name)) })
+      .catch(() => {});
   }, []);
 
   const deleteEvent = async (id) => {
@@ -276,6 +285,72 @@ const AthleticsInvoiceApp = () => {
         alert('✅ Event added!');
       } else {
         alert('❌ Failed to add event: ' + data.message);
+      }
+    } catch {
+      alert('❌ Could not reach backend');
+    }
+  };
+
+  const addRole = async () => {
+    if (!newRole.trim()) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newRole.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRoles([...roles, data.data.name]);
+        setNewRole('');
+      } else {
+        alert('❌ ' + data.message);
+      }
+    } catch {
+      alert('❌ Could not reach backend');
+    }
+  };
+
+  const deleteRole = async (roleName) => {
+    if (!window.confirm(`Delete role "${roleName}"? This will not affect existing crew assignments.`)) return;
+    // Find the role ID from the backend
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/roles`);
+      const data = await res.json();
+      if (data.success) {
+        const roleObj = data.data.find(r => r.name === roleName);
+        if (roleObj) {
+          await fetch(`${process.env.REACT_APP_API_BASE_URL}/roles/${roleObj.id}`, { method: 'DELETE' });
+          setRoles(roles.filter(r => r !== roleName));
+        }
+      }
+    } catch {
+      alert('❌ Could not reach backend');
+    }
+  };
+
+  const updateRole = async (oldRoleName, newRoleName) => {
+    if (!newRoleName.trim()) return;
+    try {
+      // Find the role ID
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/roles`);
+      const data = await res.json();
+      if (data.success) {
+        const roleObj = data.data.find(r => r.name === oldRoleName);
+        if (roleObj) {
+          const updateRes = await fetch(`${process.env.REACT_APP_API_BASE_URL}/roles/${roleObj.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newRoleName.trim() }),
+          });
+          const updateData = await updateRes.json();
+          if (updateData.success) {
+            setRoles(roles.map(r => r === oldRoleName ? newRoleName.trim() : r));
+            setEditingRole(null);
+          } else {
+            alert('❌ ' + updateData.message);
+          }
+        }
       }
     } catch {
       alert('❌ Could not reach backend');
@@ -1391,6 +1466,77 @@ Thank you for your work!
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Roles Management */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-slate-800 mb-6">Freelancer Roles</h2>
+              <p className="text-sm text-slate-600 mb-4">Manage the available roles for freelancers. These appear in dropdowns when adding or editing freelancers.</p>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Add New Role</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g., Camera Operator"
+                    value={newRole}
+                    onChange={e => setNewRole(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && addRole()}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={addRole}
+                    className="px-6 py-2 text-white rounded-lg font-semibold"
+                    style={{ backgroundColor: branding.primaryColor }}
+                  >
+                    Add Role
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-700 mb-3">{roles.length} Roles:</div>
+                {roles.map((role, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    {editingRole === role ? (
+                      <>
+                        <input
+                          type="text"
+                          defaultValue={role}
+                          onBlur={e => updateRole(role, e.target.value)}
+                          onKeyPress={e => e.key === 'Enter' && updateRole(role, e.target.value)}
+                          autoFocus
+                          className="flex-1 px-3 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => setEditingRole(null)}
+                          className="text-sm text-slate-500 hover:text-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1 font-medium text-slate-700">{role}</div>
+                        <button
+                          onClick={() => setEditingRole(role)}
+                          className="p-1 text-slate-400 hover:text-blue-600"
+                          title="Edit role"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => deleteRole(role)}
+                          className="p-1 text-slate-400 hover:text-red-600"
+                          title="Delete role"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
