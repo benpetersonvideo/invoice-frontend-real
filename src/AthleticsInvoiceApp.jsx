@@ -123,9 +123,17 @@ const AthleticsInvoiceApp = () => {
   const [showEditInvoice, setShowEditInvoice] = useState(false);
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
   const [scheduleUrl, setScheduleUrl] = useState('');
   const [editingEventId, setEditingEventId] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [newEvent, setNewEvent] = useState({
+    eventName: '',
+    eventDate: '',
+    sport: 'Football',
+    opponent: '',
+    isHome: true
+  });
   const [importPreview, setImportPreview] = useState([]);
   const [importSelected, setImportSelected] = useState([]);
   const [importFilters, setImportFilters] = useState({ location: 'all', sport: 'all' });
@@ -231,6 +239,41 @@ const AthleticsInvoiceApp = () => {
     setEvents(events.filter(e => e.id !== id));
   };
 
+  const addEvent = async () => {
+    if (!newEvent.eventName || !newEvent.eventDate || !newEvent.sport || !newEvent.opponent) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEvent),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEvents([...events, {
+          id: data.data.id,
+          event_name: newEvent.eventName,
+          event_date: newEvent.eventDate,
+          date: newEvent.eventDate,
+          sport: newEvent.sport,
+          opponent: newEvent.opponent,
+          is_home: newEvent.isHome,
+          home: newEvent.isHome,
+          invoiced: false,
+        }]);
+        setNewEvent({ eventName: '', eventDate: '', sport: 'Football', opponent: '', isHome: true });
+        setShowAddEvent(false);
+        alert('✅ Event added!');
+      } else {
+        alert('❌ Failed to add event: ' + data.message);
+      }
+    } catch {
+      alert('❌ Could not reach backend');
+    }
+  };
+
   const saveEditEvent = async (id) => {
     try {
       await fetch(`${process.env.REACT_APP_API_BASE_URL}/events/${id}`, {
@@ -334,12 +377,30 @@ const AthleticsInvoiceApp = () => {
       if (data.success) {
         const newInvoiceId = data.data.id;
         setInvoices([...invoices, { id: newInvoiceId, events: validEvents, crew: newInvoice.crew, total, status: 'Draft', invoiceNumber: invoiceNum, company: newInvoice.company }]);
-        // Mark matching calendar events as invoiced
-        setEvents(prev => prev.map(e => {
+        // Mark matching calendar events as invoiced in state and database
+        const updatedEvents = events.map(e => {
           const eDate = (e.date || e.event_date || '').substring(0, 10);
           const matched = validEvents.some(ve => ve.eventDate === eDate && ve.sport === e.sport);
-          return matched ? { ...e, invoiced: true, invoice_id: newInvoiceId } : e;
-        }));
+          if (matched) {
+            // Update in database
+            fetch(`${process.env.REACT_APP_API_BASE_URL}/events/${e.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                eventName: e.event_name || e.eventName,
+                eventDate: eDate,
+                sport: e.sport,
+                opponent: e.opponent,
+                isHome: e.home || e.is_home,
+                invoiced: true,
+                invoiceId: newInvoiceId
+              })
+            }).catch(() => {});
+            return { ...e, invoiced: true, invoice_id: newInvoiceId };
+          }
+          return e;
+        });
+        setEvents(updatedEvents);
         alert('✅ Invoice saved!');
       } else {
         alert('❌ Failed to save invoice: ' + data.message);
@@ -881,6 +942,14 @@ Thank you for your work!
                     Clear All
                   </button>
                 )}
+                <button
+                  onClick={() => setShowAddEvent(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors font-semibold"
+                  style={{ borderColor: branding.primaryColor, color: branding.primaryColor }}
+                >
+                  <Plus size={20} />
+                  Add Event
+                </button>
                 <button
                   onClick={() => setShowScheduleImport(true)}
                   className="flex items-center gap-2 text-white px-4 py-2 rounded-lg transition-colors"
@@ -2005,6 +2074,91 @@ Thank you for your work!
                 <button
                   onClick={() => setShowAddCompany(false)}
                   className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Event Modal */}
+      {showAddEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-2xl font-bold text-slate-800">Add Event Manually</h3>
+              <button onClick={() => { setShowAddEvent(false); setNewEvent({ eventName: '', eventDate: '', sport: 'Football', opponent: '', isHome: true }); }} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Event Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Football vs NMSU"
+                  value={newEvent.eventName}
+                  onChange={e => setNewEvent({ ...newEvent, eventName: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Date *</label>
+                  <input
+                    type="date"
+                    value={newEvent.eventDate}
+                    onChange={e => setNewEvent({ ...newEvent, eventDate: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Sport *</label>
+                  <select
+                    value={newEvent.sport}
+                    onChange={e => setNewEvent({ ...newEvent, sport: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {sports.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Opponent *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., NMSU"
+                    value={newEvent.opponent}
+                    onChange={e => setNewEvent({ ...newEvent, opponent: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Location *</label>
+                  <select
+                    value={newEvent.isHome ? 'home' : 'away'}
+                    onChange={e => setNewEvent({ ...newEvent, isHome: e.target.value === 'home' })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="home">Home</option>
+                    <option value="away">Away</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={addEvent}
+                  className="flex-1 text-white px-6 py-3 rounded-lg font-semibold"
+                  style={{ backgroundColor: branding.primaryColor }}
+                >
+                  Add Event
+                </button>
+                <button
+                  onClick={() => { setShowAddEvent(false); setNewEvent({ eventName: '', eventDate: '', sport: 'Football', opponent: '', isHome: true }); }}
+                  className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 font-semibold"
                 >
                   Cancel
                 </button>
