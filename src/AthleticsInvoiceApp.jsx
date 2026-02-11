@@ -215,11 +215,19 @@ const AthleticsInvoiceApp = () => {
     if (!apiUrl) return;
     fetch(`${apiUrl}/freelancers`)
       .then(r => r.json())
-      .then(data => { if (data.success && data.data.length > 0) setFreelancers(data.data.map(f => ({ ...f, w9: f.w9_on_file }))) })
+      .then(data => { if (data.success && data.data.length > 0) setFreelancers(data.data.map(f => ({ ...f, w9: f.w9_on_file, rate: parseFloat(f.rate) || 0 }))) })
       .catch(() => {});
     fetch(`${apiUrl}/invoices`)
       .then(r => r.json())
-      .then(data => { if (data.success && data.data.length > 0) setInvoices(data.data) })
+      .then(data => { 
+        if (data.success && data.data.length > 0) {
+          setInvoices(data.data.map(inv => ({
+            ...inv,
+            total: parseFloat(inv.total) || 0,
+            crew: (inv.crew || []).map(c => ({ ...c, rate: parseFloat(c.rate) || 0 }))
+          })))
+        }
+      })
       .catch(() => {});
     fetch(`${apiUrl}/companies`)
       .then(r => r.json())
@@ -364,7 +372,7 @@ const AthleticsInvoiceApp = () => {
   const addInvoice = async () => {
     const validEvents = newInvoice.events.filter(e => e.eventName && e.eventDate && e.sport);
     if (validEvents.length === 0 || newInvoice.crew.length === 0) return;
-    const total = newInvoice.crew.reduce((sum, member) => sum + member.rate, 0);
+    const total = newInvoice.crew.reduce((sum, member) => sum + (parseFloat(member.rate) || 0), 0);
     const company = companies.find(c => c.name === newInvoice.company);
     const invoiceNum = newInvoice.invoiceNumber || `${company.invoicePrefix}-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
     try {
@@ -470,12 +478,18 @@ const AthleticsInvoiceApp = () => {
 
   const updateCrewMember = (index, field, value) => {
     const updatedCrew = [...newInvoice.crew];
-    updatedCrew[index][field] = value;
+    
+    // Always parse rate as a number
+    if (field === 'rate') {
+      updatedCrew[index][field] = parseFloat(value) || 0;
+    } else {
+      updatedCrew[index][field] = value;
+    }
     
     if (field === 'freelancerId' && value) {
       const freelancer = freelancers.find(f => f.id === parseInt(value));
       if (freelancer) {
-        updatedCrew[index].rate = freelancer.rate;
+        updatedCrew[index].rate = parseFloat(freelancer.rate) || 0;
         updatedCrew[index].role = freelancer.specialty;
       }
     }
@@ -1786,7 +1800,7 @@ Thank you for your work!
                 {newInvoice.crew.length > 0 && (
                   <div className="mt-4 text-right">
                     <span className="text-lg font-semibold text-slate-800">
-                      Total: ${newInvoice.crew.reduce((sum, m) => sum + m.rate, 0)}
+                      Total: ${newInvoice.crew.reduce((sum, m) => sum + (parseFloat(m.rate) || 0), 0).toFixed(2)}
                     </span>
                   </div>
                 )}
