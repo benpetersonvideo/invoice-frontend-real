@@ -122,6 +122,8 @@ const AthleticsInvoiceApp = () => {
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [showEditInvoice, setShowEditInvoice] = useState(false);
   const [showAddCompany, setShowAddCompany] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [showEditCompany, setShowEditCompany] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [scheduleUrl, setScheduleUrl] = useState('');
@@ -169,7 +171,14 @@ const AthleticsInvoiceApp = () => {
     logoUrl: '',
     primaryColor: '#2563eb',
     secondaryColor: '#1e40af',
-    schoolName: ''
+    schoolName: '',
+    billTo: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    phone: '',
+    email: ''
   });
 
   // Calculate statistics
@@ -1557,20 +1566,75 @@ Thank you for your work!
               <div className="space-y-4">
                 {companies.map(company => (
                   <div key={company.id} className="border border-slate-200 rounded-lg p-6">
-                    <h3 className="text-xl font-semibold text-slate-800 mb-4">{company.name}</h3>
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-xl font-semibold text-slate-800">{company.name}</h3>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setEditingCompany({ ...company }); setShowEditCompany(true); }}
+                          className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="Edit company"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Delete company "${company.name}"?`)) return;
+                            try {
+                              await fetch(`${process.env.REACT_APP_API_BASE_URL}/companies/${company.id}`, { method: 'DELETE' });
+                            } catch {}
+                            setCompanies(companies.filter(c => c.id !== company.id));
+                          }}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete company"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
+                      {company.billTo && (
+                        <div className="col-span-2">
+                          <span className="font-semibold text-slate-600">Bill To:</span>
+                          <div className="text-slate-800 mt-1">{company.billTo || company.bill_to}</div>
+                        </div>
+                      )}
+                      {(company.address || company.city || company.state || company.zip) && (
+                        <div className="col-span-2">
+                          <span className="font-semibold text-slate-600">Address:</span>
+                          <div className="text-slate-800 mt-1">
+                            {company.address && <div>{company.address}</div>}
+                            {(company.city || company.state || company.zip) && (
+                              <div>{company.city}{company.city && company.state ? ', ' : ''}{company.state} {company.zip}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {company.phone && (
+                        <div>
+                          <span className="font-semibold text-slate-600">Phone:</span>
+                          <div className="text-slate-800 mt-1">{company.phone}</div>
+                        </div>
+                      )}
+                      {company.email && (
+                        <div>
+                          <span className="font-semibold text-slate-600">Email:</span>
+                          <div className="text-slate-800 mt-1">{company.email}</div>
+                        </div>
+                      )}
                       <div>
                         <span className="font-semibold text-slate-600">Payment Terms:</span>
-                        <div className="text-slate-800 mt-1">{company.paymentTerms}</div>
+                        <div className="text-slate-800 mt-1">{company.paymentTerms || company.payment_terms}</div>
                       </div>
                       <div>
                         <span className="font-semibold text-slate-600">Invoice Prefix:</span>
-                        <div className="text-slate-800 mt-1">{company.invoicePrefix}</div>
+                        <div className="text-slate-800 mt-1">{company.invoicePrefix || company.invoice_prefix}</div>
                       </div>
-                      <div className="col-span-2">
-                        <span className="font-semibold text-slate-600">Bank Details:</span>
-                        <div className="text-slate-800 mt-1">{company.bankDetails}</div>
-                      </div>
+                      {company.bankDetails && (
+                        <div className="col-span-2">
+                          <span className="font-semibold text-slate-600">Bank Details:</span>
+                          <div className="text-slate-800 mt-1">{company.bankDetails || company.bank_details}</div>
+                        </div>
+                      )}
                       {company.primaryColor && (
                         <div className="col-span-2 flex gap-4">
                           <div className="flex items-center gap-2">
@@ -1578,12 +1642,12 @@ Thank you for your work!
                             <div className="flex gap-2">
                               <div 
                                 className="w-8 h-8 rounded border border-slate-300"
-                                style={{ backgroundColor: company.primaryColor }}
+                                style={{ backgroundColor: company.primaryColor || company.primary_color }}
                                 title="Primary"
                               />
                               <div 
                                 className="w-8 h-8 rounded border border-slate-300"
-                                style={{ backgroundColor: company.secondaryColor }}
+                                style={{ backgroundColor: company.secondaryColor || company.secondary_color }}
                                 title="Secondary"
                               />
                             </div>
@@ -2161,6 +2225,59 @@ Thank you for your work!
               />
               <input
                 type="text"
+                placeholder="Bill To (e.g., Accounts Payable, Finance Department)"
+                value={newCompany.billTo}
+                onChange={(e) => setNewCompany({ ...newCompany, billTo: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Address"
+                value={newCompany.address}
+                onChange={(e) => setNewCompany({ ...newCompany, address: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="grid grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  placeholder="City"
+                  value={newCompany.city}
+                  onChange={(e) => setNewCompany({ ...newCompany, city: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="State"
+                  value={newCompany.state}
+                  onChange={(e) => setNewCompany({ ...newCompany, state: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="ZIP"
+                  value={newCompany.zip}
+                  onChange={(e) => setNewCompany({ ...newCompany, zip: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="tel"
+                  placeholder="Phone"
+                  value={newCompany.phone}
+                  onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={newCompany.email}
+                  onChange={(e) => setNewCompany({ ...newCompany, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <input
+                type="text"
                 placeholder="Payment Terms (e.g., Net 30)"
                 value={newCompany.paymentTerms}
                 onChange={(e) => setNewCompany({ ...newCompany, paymentTerms: e.target.value })}
@@ -2233,6 +2350,179 @@ Thank you for your work!
                 </button>
                 <button
                   onClick={() => setShowAddCompany(false)}
+                  className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Company Modal */}
+      {showEditCompany && editingCompany && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white">
+              <h3 className="text-2xl font-bold text-slate-800">Edit Company</h3>
+              <button onClick={() => { setShowEditCompany(false); setEditingCompany(null); }} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <input
+                type="text"
+                placeholder="Company Name *"
+                value={editingCompany.name}
+                onChange={(e) => setEditingCompany({ ...editingCompany, name: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="School Name"
+                value={editingCompany.schoolName || editingCompany.school_name || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, schoolName: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Bill To (e.g., Accounts Payable)"
+                value={editingCompany.billTo || editingCompany.bill_to || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, billTo: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Address"
+                value={editingCompany.address || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, address: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="grid grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  placeholder="City"
+                  value={editingCompany.city || ''}
+                  onChange={(e) => setEditingCompany({ ...editingCompany, city: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="State"
+                  value={editingCompany.state || ''}
+                  onChange={(e) => setEditingCompany({ ...editingCompany, state: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="ZIP"
+                  value={editingCompany.zip || ''}
+                  onChange={(e) => setEditingCompany({ ...editingCompany, zip: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="tel"
+                  placeholder="Phone"
+                  value={editingCompany.phone || ''}
+                  onChange={(e) => setEditingCompany({ ...editingCompany, phone: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={editingCompany.email || ''}
+                  onChange={(e) => setEditingCompany({ ...editingCompany, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Payment Terms (e.g., Net 30)"
+                value={editingCompany.paymentTerms || editingCompany.payment_terms || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, paymentTerms: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <textarea
+                placeholder="Bank Details"
+                value={editingCompany.bankDetails || editingCompany.bank_details || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, bankDetails: e.target.value })}
+                rows={2}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Invoice Prefix (e.g., INV, BCST)"
+                value={editingCompany.invoicePrefix || editingCompany.invoice_prefix || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, invoicePrefix: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Primary Color</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={editingCompany.primaryColor || editingCompany.primary_color || '#2563eb'}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, primaryColor: e.target.value })}
+                      className="h-10 w-16 rounded border border-slate-300 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={editingCompany.primaryColor || editingCompany.primary_color || ''}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, primaryColor: e.target.value })}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Secondary Color</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={editingCompany.secondaryColor || editingCompany.secondary_color || '#1e40af'}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, secondaryColor: e.target.value })}
+                      className="h-10 w-16 rounded border border-slate-300 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={editingCompany.secondaryColor || editingCompany.secondary_color || ''}
+                      onChange={(e) => setEditingCompany({ ...editingCompany, secondaryColor: e.target.value })}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+              <input
+                type="url"
+                placeholder="Logo URL (optional)"
+                value={editingCompany.logoUrl || editingCompany.logo_url || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, logoUrl: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch(`${process.env.REACT_APP_API_BASE_URL}/companies/${editingCompany.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(editingCompany),
+                      });
+                    } catch {}
+                    setCompanies(companies.map(c => c.id === editingCompany.id ? editingCompany : c));
+                    setShowEditCompany(false);
+                    setEditingCompany(null);
+                  }}
+                  className="flex-1 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+                  style={{ backgroundColor: branding.primaryColor }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => { setShowEditCompany(false); setEditingCompany(null); }}
                   className="px-6 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-semibold"
                 >
                   Cancel
