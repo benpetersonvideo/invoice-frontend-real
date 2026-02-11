@@ -563,14 +563,26 @@ const AthleticsInvoiceApp = () => {
   const saveEditInvoice = async () => {
     if (!editingInvoice) return;
     const total = editingInvoice.crew.reduce((sum, m) => sum + (parseFloat(m.rate) || 0), 0);
+    const invoiceNumber = editingInvoice.invoiceNumber || editingInvoice.invoice_number || '';
     try {
-      await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${editingInvoice.id}`, {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/invoices/${editingInvoice.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editingInvoice, total }),
+        body: JSON.stringify({ ...editingInvoice, invoiceNumber, total }),
       });
-    } catch {}
-    setInvoices(invoices.map(inv => inv.id === editingInvoice.id ? { ...editingInvoice, total } : inv));
+      const data = await res.json();
+      if (!data.success) {
+        alert('❌ Failed to save: ' + data.message);
+        return;
+      }
+    } catch {
+      alert('❌ Could not reach backend');
+      return;
+    }
+    setInvoices(invoices.map(inv => inv.id === editingInvoice.id 
+      ? { ...editingInvoice, invoiceNumber, invoice_number: invoiceNumber, total } 
+      : inv
+    ));
     setShowEditInvoice(false);
     setEditingInvoice(null);
   };
@@ -1053,7 +1065,15 @@ Thank you for your work!
                           <Mail size={18} />
                         </button>
                         <button
-                          onClick={() => { setEditingInvoice({ ...invoice, crew: invoice.crew ? [...invoice.crew] : [], events: invoice.events ? [...invoice.events] : [] }); setShowEditInvoice(true); }}
+                          onClick={() => { 
+                            setEditingInvoice({ 
+                              ...invoice, 
+                              invoiceNumber: invoice.invoiceNumber || invoice.invoice_number || '',
+                              crew: invoice.crew ? [...invoice.crew] : [], 
+                              events: invoice.events ? [...invoice.events] : [] 
+                            }); 
+                            setShowEditInvoice(true); 
+                          }}
                           className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                           title="Edit Invoice"
                         >
